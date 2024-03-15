@@ -32,6 +32,8 @@ async def on_ready():
 
 @client.event
 async def on_member_join(member):
+    if(member.guild.id != GUILDID):
+        return
 
     role = get(member.guild.roles, id=ROLEID)
     await member.add_roles(role)
