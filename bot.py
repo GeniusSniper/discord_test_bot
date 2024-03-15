@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 from discord.utils import get
 
 from discord.ext import commands,tasks
-import youtube_dl
+
+from discord import FFmpegPCMAudio
+from mpplayerfile import give_link,download_vid,find_music_name,remove_all_files, delete_selected_file
+from discord import FFmpegAudio
+from discord import FFmpegOpusAudio
+import asyncio
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -72,111 +77,81 @@ async def on_message(message):
 #     print('here')
 #     await ctx.send(arg)
 
-youtube_dl.utils.bug_reports_message = lambda: ''
-
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
-
-ffmpeg_options = {
-    'options': '-vn'
-}
-
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
-
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-        self.title = data.get('title')
-        self.url = ""
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-        if 'entries' in data:
-            # take first item from a playlist
-            data = data['entries'][0]
-        filename = data['title'] if stream else ytdl.prepare_filename(data)
-        return filename
-
-@bot.command(name='join', help='Tells the bot to join the voice channel')
-async def join(ctx):
-    if(guild_check(ctx.message)):
-        return
-    if not ctx.message.author.voice:
-        await ctx.send("{} is not connected to a voice channel".format(ctx.message.author.name))
-        return
-    else:
-        channel = ctx.message.author.voice.channel
-    await channel.connect()
-
-@bot.command(name='leave', help='To make the bot leave the voice channel')
-async def leave(ctx):
-    if(guild_check(ctx.message)):
-        return
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_connected():
-        await voice_client.disconnect()
-    else:
-        await ctx.send("The bot is not connected to a voice channel.")
-
-@bot.command(name='play', help='To play song')
-async def play(ctx,url):
-    if(guild_check(ctx.message)):
-        return
-    try :
-        await join(ctx)
-        server = ctx.message.guild
-        voice_channel = server.voice_client
-
-        async with ctx.typing():
-            filename = await YTDLSource.from_url(url, loop=bot.loop)
-            voice_channel.play(discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=filename))
-        await ctx.send('**Now playing:** {}'.format(filename))
-    except:
-        await ctx.send("The bot is not connected to a voice channel.")
-
-
-@bot.command(name='pause', help='This command pauses the song')
+@bot.command()
 async def pause(ctx):
-    if(guild_check(ctx.message)):
+    if guild_check(ctx.message):
         return
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.pause()
+    if ctx.voice_client and ctx.voice_client.is_playing(): # if the music is already playing 
+        ctx.voice_client.pause() #pausing the music 
+        await ctx.send("Playback paused.") #sending confirmation on  channel
     else:
-        await ctx.send("The bot is not playing anything at the moment.")
-    
-@bot.command(name='resume', help='Resumes the song')
-async def resume(ctx):
-    if(guild_check(ctx.message)):
-        return
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_paused():
-        await voice_client.resume()
-    else:
-        await ctx.send("The bot was not playing anything before this. Use play_song command")
+        await ctx.send('[-] An error occured: You have to be in voice channel to use this commmand') #if you are not in vc
 
-@bot.command(name='stop', help='Stops the song')
-async def stop(ctx):
-    if(guild_check(ctx.message)):
+@bot.command()
+async def resume(ctx):
+    if guild_check(ctx.message):
         return
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.stop()
+    if ctx.voice_client and ctx.voice_client.is_paused(): # If the music is already paused
+        ctx.voice_client.resume() #resuming the music
+        await ctx.send("Playback resumed.")#sending confirmation on  channel
     else:
-        await ctx.send("The bot is not playing anything at the moment.")
+        await ctx.send('[-] An error occured: You have to be in voice channel to use this commmand') #if you are not in vc
+
+@bot.command()
+async def leave(ctx): 
+    if guild_check(ctx.message):
+        return
+    if ctx.voice_client: #if you are in vc 
+        await ctx.guild.voice_client.disconnect() #disconnecting from the vc
+        await ctx.send("Lefted the voice channel") #sending confirmation on channel
+        await asyncio.sleep(1)
+        remove_all_files("music") #deleting the all the files in the folder that  we downloaded to not waste space on your pc
+
+    else:
+        await ctx.send("[-] An Error occured: You have to be in a voice channel to run this command") #if you are not in vc
+
+@bot.command()
+async def join(ctx):
+    if guild_check(ctx.message):
+        return
+    if ctx.author.voice:
+        channel = ctx.message.author.voice.channel
+        try:
+
+             await channel.connect() #connecting to channel
+        except:
+            await ctx.send("[-] An error occured: Couldn't connect to the channel") #if there is an error
+
+    else:
+        await ctx.send("[-] An Error occured: You have to be in a voice channel to run this command") #if you are not in vc
+
+
+
+@bot.command(name="play")
+async def play(ctx,*,title):
+    if guild_check(ctx.message):
+        return
+    download_vid(title) # Downloading the mp4 of the desired vid
+    voice_channel = ctx.author.voice.channel
+
+   
+    if not ctx.voice_client: #if you are not in  vc 
+        voice_channel = await voice_channel.connect() #connecting to vc
+
+    try:
+        async with ctx.typing():
+            player = discord.FFmpegPCMAudio(source=f"music/{find_music_name()}") #executable part is where we downloaded ffmpeg. We are writing our find_mmusic name func because , we want to bot to play our desired song fro the folder
+            player = discord.PCMVolumeTransformer(player, volume=0.3)
+            ctx.voice_client.play(player, after=lambda e: print('Player error: %s' % e) if e else None)
+        await ctx.send(f'Now playing: {find_music_name()}') #sening confirmmation
+
+        while ctx.voice_client.is_playing():
+            await asyncio.sleep(1)
+        delete_selected_file(find_music_name()) # deleting the file after it played
+
+    except Exception as e:
+        await ctx.send(f'Error: {e}') #sending error
+
 
 bot.run(TOKEN)
 # client.run(TOKEN)
