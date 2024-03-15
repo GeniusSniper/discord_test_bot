@@ -8,7 +8,7 @@ from discord.utils import get
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD = os.getenv('DISCORD_GUILD')
+# GUILD = os.getenv('DISCORD_GUILD')
 ROLEID = int(os.getenv('DISCORD_ROLE_ID'))
 GUILDID = int(os.getenv('DISCORD_GUILD_ID'))
 
@@ -20,7 +20,7 @@ client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
-    print(client.guilds)
+    # print(client.guilds)
     for guild in client.guilds:
         if guild.id == GUILDID:
             break
@@ -50,16 +50,9 @@ async def on_message(message):
     if message.author == client.user:
         return
     
-    brooklyn_99_quotes = [
-        'I\'m the human form of the 💯 emoji.',
-        'Bingpot!',
-        (
-            'Cool. Cool cool cool cool cool cool cool, '
-            'no doubt no doubt no doubt no doubt.'
-        ),
-    ]
-    if message.content == '99!':
-        response = random.choice(brooklyn_99_quotes)
+    
+    if 'sniper' in message.content:
+        response = '别问，问就是不会'
         await message.channel.send(response)
     elif message.content == 'raise-exception':
         raise discord.DiscordException
